@@ -75,7 +75,7 @@ create or replace PACKAGE body SESSION_CACHE_PKG AS
                     p_slidingExpirationInSeconds, p_absoluteExpiration);
         ELSE
             UPDATE SESSION_CACHE
-                SET Value = value, ExpiresAtTime = 
+                SET Value = p_value, ExpiresAtTime = 
                     case 
                         when (p_absoluteExpiration IS NULL) OR (systimestamp + (p_slidingExpirationInSeconds/(24*60*60)) < p_absoluteExpiration)
                              then systimestamp + (p_slidingExpirationInSeconds/(24*60*60))
