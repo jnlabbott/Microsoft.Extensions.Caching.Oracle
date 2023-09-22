@@ -178,7 +178,7 @@ namespace Microsoft.Extensions.Caching.Oracle
             List<OracleParameter> parameters = new List<OracleParameter>();
             parameters.Add(new OracleParameter { ParameterName = "p_key", OracleDbType = OracleDbType.Varchar2, Value = key });
             parameters.Add(new OracleParameter { ParameterName = "p_slidingExpirationInSeconds", OracleDbType = OracleDbType.Int64, Value = options.SlidingExpiration?.TotalSeconds });
-            parameters.Add(new OracleParameter { ParameterName = "p_absoluteExpiration", OracleDbType = OracleDbType.TimeStamp, Value = (absoluteExpiration ?? (object)DBNull.Value) });
+            parameters.Add(new OracleParameter { ParameterName = "p_absoluteExpiration", OracleDbType = OracleDbType.TimeStamp, Value = (absoluteExpiration != null ? new OracleTimeStamp(absoluteExpiration.Value.DateTime) : (object)DBNull.Value) });
             var procedureName = $"{SchemaName}.SESSION_CACHE_PKG.Put_Cache";
             oracleDatabaseOperations.ExecuteProcedure(key, procedureName, parameters, value);
         }
@@ -239,7 +239,7 @@ namespace Microsoft.Extensions.Caching.Oracle
             List<OracleParameter> parameters = new List<OracleParameter>();
             parameters.Add(new OracleParameter { ParameterName = "p_key", OracleDbType = OracleDbType.Varchar2, Value = key });
             parameters.Add(new OracleParameter { ParameterName = "p_slidingExpirationInSeconds", OracleDbType = OracleDbType.Int64, Value = options.SlidingExpiration?.TotalSeconds });
-            parameters.Add(new OracleParameter { ParameterName = "p_absoluteExpiration", OracleDbType = OracleDbType.TimeStamp, Value = (absoluteExpiration ?? (object)DBNull.Value) });
+            parameters.Add(new OracleParameter { ParameterName = "p_absoluteExpiration", OracleDbType = OracleDbType.TimeStamp, Value = (absoluteExpiration != null ? new OracleTimeStamp(absoluteExpiration.Value.DateTime) : (object)DBNull.Value) });
             var procedureName = $"{SchemaName}.SESSION_CACHE_PKG.Put_Cache";
             await oracleDatabaseOperations.ExecuteProcedureAsync(key, procedureName, parameters, value);
         }
