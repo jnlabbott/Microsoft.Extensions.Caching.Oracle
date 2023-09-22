@@ -15,7 +15,7 @@ namespace Microsoft.Extensions.Caching.Oracle
     /// </summary>
     public class OracleCache : IDistributedCache
     {
-        private static readonly TimeSpan MinimumExpiredItemsDeletionInterval = TimeSpan.FromMinutes(5);
+        private static readonly TimeSpan MinimumExpiredItemsDeletionInterval = TimeSpan.FromMinutes(1);
         private static readonly TimeSpan DefaultExpiredItemsDeletionInterval = TimeSpan.FromMinutes(30);
 
         public IDatabaseOperations m_oracleOperations;
