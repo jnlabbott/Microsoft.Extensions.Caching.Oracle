@@ -148,6 +148,7 @@ namespace Microsoft.Extensions.Caching.Oracle
         static Counter<double> s_cacheReadBytes;
         static Counter<double> s_cacheWriteBytes;
         static ObservableGauge<double> s_cacheSizeBytes;
+        static ObservableGauge<double> s_cacheItemCount;
 
         public IOracleDatabaseOperations oracleDatabaseOperations;
         protected string SchemaName { get; }
@@ -167,6 +168,7 @@ namespace Microsoft.Extensions.Caching.Oracle
                 s_cacheReadBytes = s_meter.CreateCounter<double>("cache-read-bytes");
                 s_cacheWriteBytes = s_meter.CreateCounter<double>("cache-written-bytes");
                 s_cacheSizeBytes = s_meter.CreateObservableGauge<double>("cache-size-bytes", () => GetCacheSize());
+                s_cacheItemCount = s_meter.CreateObservableGauge<double>("cache-count-items", () => GetCacheItemCount());
             }
         }
 
@@ -212,11 +214,18 @@ namespace Microsoft.Extensions.Caching.Oracle
             var procedureName = $"{SchemaName}.SESSION_CACHE_PKG.GetSize";
             var result = oracleDatabaseOperations.ExecuteProcedure(String.Empty, procedureName, parameters);
             return BitConverter.ToInt64(result, 0);
+        }
 
-            //if (result != null)
-                //s_cacheReadBytes.Add(result.Length);
-            //return result;
+        public virtual long GetCacheItemCount()
+        {
+            s_cacheReadHits.Add(1);
 
+            List<OracleParameter> parameters = new List<OracleParameter>();
+            parameters.Add(new OracleParameter { ParameterName = "p_value", OracleDbType = OracleDbType.Int64, Value = 0, Direction = ParameterDirection.Output });
+
+            var procedureName = $"{SchemaName}.SESSION_CACHE_PKG.GetCount";
+            var result = oracleDatabaseOperations.ExecuteProcedure(String.Empty, procedureName, parameters);
+            return BitConverter.ToInt64(result, 0);
         }
 
         public virtual void SetCacheItem(string key, byte[] value, DistributedCacheEntryOptions options)
