@@ -11,6 +11,8 @@ using Oracle.ManagedDataAccess.Client;
 using Oracle.ManagedDataAccess.Types;
 using System.Collections.Generic;
 
+using System.Diagnostics.Metrics;
+
 namespace Microsoft.Extensions.Caching.Oracle
 {
     internal class OracleDatabaseOperations : IOracleDatabaseOperations
@@ -135,6 +137,12 @@ namespace Microsoft.Extensions.Caching.Oracle
     }
     public class DatabaseOperations : IDatabaseOperations
     {
+        static Meter s_meter;
+        static Counter<int> s_cacheReadHits;
+        static Counter<int> s_cacheWriteHits;
+        static Counter<double> s_cacheReadBytes;
+        static Counter<double> s_cacheWriteBytes;
+
         public IOracleDatabaseOperations oracleDatabaseOperations;
         protected string SchemaName { get; }
         protected ISystemClock SystemClock { get; }
@@ -144,6 +152,15 @@ namespace Microsoft.Extensions.Caching.Oracle
             oracleDatabaseOperations = new OracleDatabaseOperations(connectionString);
             SchemaName = schemaName;
             SystemClock = systemClock;
+
+            if (s_meter == null)
+            {
+                s_meter = new("Microsoft.Extensions.Caching.Oracle", "6.0.1");
+                s_cacheReadHits = s_meter.CreateCounter<int>("cache-read");
+                s_cacheWriteHits = s_meter.CreateCounter<int>("cache-write");
+                s_cacheReadBytes = s_meter.CreateCounter<double>("cache-bytes-read");
+                s_cacheWriteBytes = s_meter.CreateCounter<double>("cache-bytes-written");
+            }
         }
 
         public void DeleteCacheItem(string key)
@@ -155,11 +172,18 @@ namespace Microsoft.Extensions.Caching.Oracle
         }
         public byte[] GetCacheItem(string key)
         {
+            s_cacheReadHits.Add(1);
+            
             List<OracleParameter> parameters = new List<OracleParameter>();
             parameters.Add(new OracleParameter { ParameterName = "p_key", OracleDbType = OracleDbType.Varchar2, Value = key });
             parameters.Add(new OracleParameter { ParameterName = "p_value", OracleDbType = OracleDbType.Blob, Value = key, Direction = ParameterDirection.Output });
             var procedureName = $"{SchemaName}.SESSION_CACHE_PKG.Get_Cache";
-            return oracleDatabaseOperations.ExecuteProcedure(key, procedureName, parameters);
+
+            var result = oracleDatabaseOperations.ExecuteProcedure(key, procedureName, parameters);
+
+            if (result != null)
+                s_cacheReadBytes.Add(result.Length);
+            return result;
         }
         public void RefreshCacheItem(string key)
         {
@@ -170,8 +194,20 @@ namespace Microsoft.Extensions.Caching.Oracle
             var procedureName = $"{SchemaName}.SESSION_CACHE_PKG.DeleteExpiredCache";
             oracleDatabaseOperations.ExecuteProcedure(String.Empty, procedureName);
         }
+
+        public virtual long GetCacheSize()
+        {
+            var procedureName = $"{SchemaName}.SESSION_CACHE_PKG.GetSize";
+            var result = oracleDatabaseOperations.ExecuteProcedure(String.Empty, procedureName);
+            return BitConverter.ToInt64(result, 0);
+        }
+
         public virtual void SetCacheItem(string key, byte[] value, DistributedCacheEntryOptions options)
         {
+            s_cacheWriteHits.Add(1);
+            if (value != null)
+                s_cacheWriteBytes.Add(value.Length);
+
             var absoluteExpiration = GetAbsoluteExpiration(SystemClock.UtcNow, options);
             ValidateOptions(options.SlidingExpiration, absoluteExpiration);
 
@@ -210,12 +246,20 @@ namespace Microsoft.Extensions.Caching.Oracle
         }
         public async Task<byte[]> GetCacheItemAsync(string key, CancellationToken token = default(CancellationToken))
         {
+            s_cacheReadHits.Add(1);
+            
             token.ThrowIfCancellationRequested();
             List<OracleParameter> parameters = new List<OracleParameter>();
             parameters.Add(new OracleParameter { ParameterName = "p_key", OracleDbType = OracleDbType.Varchar2, Value = key });
             parameters.Add(new OracleParameter { ParameterName = "p_value", OracleDbType = OracleDbType.Blob, Value = key, Direction = ParameterDirection.Output });
             var procedureName = $"{SchemaName}.SESSION_CACHE_PKG.Get_Cache";
-            return await oracleDatabaseOperations.ExecuteProcedureAsync(key, procedureName, parameters);
+            
+            var result = oracleDatabaseOperations.ExecuteProcedure(key, procedureName, parameters);
+
+            if (result != null)
+                s_cacheReadBytes.Add(result.Length);
+
+            return result;
         }
         public async Task RefreshCacheItemAsync(string key, CancellationToken token = default(CancellationToken))
         {
@@ -232,6 +276,10 @@ namespace Microsoft.Extensions.Caching.Oracle
         }
         public async Task SetCacheItemAsync(string key, byte[] value, DistributedCacheEntryOptions options, CancellationToken token = default(CancellationToken))
         {
+            s_cacheWriteHits.Add(1);
+            if (value != null)
+                s_cacheWriteBytes.Add(value.Length);
+
             token.ThrowIfCancellationRequested();
             var absoluteExpiration = GetAbsoluteExpiration(SystemClock.UtcNow, options);
             ValidateOptions(options.SlidingExpiration, absoluteExpiration);
