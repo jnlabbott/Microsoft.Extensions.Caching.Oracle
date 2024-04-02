@@ -129,7 +129,7 @@ create or replace PACKAGE body SESSION_CACHE_PKG AS
     PROCEDURE GetCount(p_value OUT NUMBER)
     AS
     BEGIN
-        SELECT COUNT(value) INTO p_value FROM SESSION_CACHE;
+        SELECT COUNT(Id) INTO p_value FROM SESSION_CACHE;
     END;
 
 END;
