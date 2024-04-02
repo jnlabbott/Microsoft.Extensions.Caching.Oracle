@@ -50,6 +50,7 @@ create or replace PACKAGE SESSION_CACHE_PKG AS
     PROCEDURE Get_Cache(p_key IN VARCHAR2, p_value OUT BLOB);
     PROCEDURE Delete_Cache(p_key IN VARCHAR2);
     PROCEDURE DeleteExpiredCache;
+    PROCEDURE GetSize;
 END;
 /
 create or replace PACKAGE body SESSION_CACHE_PKG AS
@@ -116,6 +117,12 @@ create or replace PACKAGE body SESSION_CACHE_PKG AS
     AS
     BEGIN
         DELETE FROM SESSION_CACHE WHERE ExpiresAtTime < systimestamp;
+    END;
+
+    PROCEDURE GetSize(p_value OUT NUMBER)
+    AS
+    BEGIN
+        SELECT SUM(DBMS_LOB.GETLENGTH(value)) INTO p_value FROM SESSION_CACHE;
     END;
 
 END;
