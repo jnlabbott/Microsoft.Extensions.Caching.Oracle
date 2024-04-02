@@ -51,6 +51,7 @@ create or replace PACKAGE SESSION_CACHE_PKG AS
     PROCEDURE Delete_Cache(p_key IN VARCHAR2);
     PROCEDURE DeleteExpiredCache;
     PROCEDURE GetSize;
+    PROCEDURE GetCount;
 END;
 /
 create or replace PACKAGE body SESSION_CACHE_PKG AS
@@ -123,6 +124,12 @@ create or replace PACKAGE body SESSION_CACHE_PKG AS
     AS
     BEGIN
         SELECT SUM(DBMS_LOB.GETLENGTH(value)) INTO p_value FROM SESSION_CACHE;
+    END;
+
+    PROCEDURE GetCount(p_value OUT NUMBER)
+    AS
+    BEGIN
+        SELECT COUNT(value) INTO p_value FROM SESSION_CACHE;
     END;
 
 END;
