@@ -119,6 +119,11 @@ namespace Microsoft.Extensions.Caching.Oracle
                                         result = blob_data.Value;
                                     }
                                 }
+                                if ((parameter.OracleDbType == OracleDbType.Int64) && (parameter.Direction == ParameterDirection.Output))
+                                {
+                                    OracleDecimal data = (OracleDecimal)parameter.Value;
+                                    result = BitConverter.GetBytes(data.ToInt64());
+                                }
                             }
                         }
                     }
@@ -142,6 +147,7 @@ namespace Microsoft.Extensions.Caching.Oracle
         static Counter<int> s_cacheWriteHits;
         static Counter<double> s_cacheReadBytes;
         static Counter<double> s_cacheWriteBytes;
+        static ObservableGauge<double> s_cacheSizeBytes;
 
         public IOracleDatabaseOperations oracleDatabaseOperations;
         protected string SchemaName { get; }
@@ -156,10 +162,11 @@ namespace Microsoft.Extensions.Caching.Oracle
             if (s_meter == null)
             {
                 s_meter = new("Microsoft.Extensions.Caching.Oracle", "6.0.1");
-                s_cacheReadHits = s_meter.CreateCounter<int>("cache-read");
-                s_cacheWriteHits = s_meter.CreateCounter<int>("cache-write");
-                s_cacheReadBytes = s_meter.CreateCounter<double>("cache-bytes-read");
-                s_cacheWriteBytes = s_meter.CreateCounter<double>("cache-bytes-written");
+                s_cacheReadHits = s_meter.CreateCounter<int>("cache-read-count");
+                s_cacheWriteHits = s_meter.CreateCounter<int>("cache-write-count");
+                s_cacheReadBytes = s_meter.CreateCounter<double>("cache-read-bytes");
+                s_cacheWriteBytes = s_meter.CreateCounter<double>("cache-written-bytes");
+                s_cacheSizeBytes = s_meter.CreateObservableGauge<double>("cache-size-bytes", () => GetCacheSize());
             }
         }
 
@@ -197,9 +204,19 @@ namespace Microsoft.Extensions.Caching.Oracle
 
         public virtual long GetCacheSize()
         {
+            s_cacheReadHits.Add(1);
+
+            List<OracleParameter> parameters = new List<OracleParameter>();
+            parameters.Add(new OracleParameter { ParameterName = "p_value", OracleDbType = OracleDbType.Int64, Value = 0, Direction = ParameterDirection.Output });
+
             var procedureName = $"{SchemaName}.SESSION_CACHE_PKG.GetSize";
-            var result = oracleDatabaseOperations.ExecuteProcedure(String.Empty, procedureName);
+            var result = oracleDatabaseOperations.ExecuteProcedure(String.Empty, procedureName, parameters);
             return BitConverter.ToInt64(result, 0);
+
+            //if (result != null)
+                //s_cacheReadBytes.Add(result.Length);
+            //return result;
+
         }
 
         public virtual void SetCacheItem(string key, byte[] value, DistributedCacheEntryOptions options)
