@@ -143,12 +143,15 @@ namespace Microsoft.Extensions.Caching.Oracle
     public class DatabaseOperations : IDatabaseOperations
     {
         static Meter s_meter;
+        static UpDownCounter<int> s_updown;
+        
         static Counter<int> s_cacheReadHits;
         static Counter<int> s_cacheWriteHits;
         static Counter<double> s_cacheReadBytes;
         static Counter<double> s_cacheWriteBytes;
         static ObservableGauge<double> s_cacheSizeBytes;
         static ObservableGauge<double> s_cacheItemCount;
+        static DateTime s_resetTimeSpamp;
 
         public IOracleDatabaseOperations oracleDatabaseOperations;
         protected string SchemaName { get; }
@@ -162,13 +165,32 @@ namespace Microsoft.Extensions.Caching.Oracle
 
             if (s_meter == null)
             {
+                s_resetTimeSpamp = DateTime.Now.AddMinutes(1);
                 s_meter = new("Microsoft.Extensions.Caching.Oracle", "6.0.1");
+                s_updown = s_meter.CreateUpDownCounter<int>("up-down");
                 s_cacheReadHits = s_meter.CreateCounter<int>("cache-read-count");
                 s_cacheWriteHits = s_meter.CreateCounter<int>("cache-write-count");
                 s_cacheReadBytes = s_meter.CreateCounter<double>("cache-read-bytes");
                 s_cacheWriteBytes = s_meter.CreateCounter<double>("cache-written-bytes");
                 s_cacheSizeBytes = s_meter.CreateObservableGauge<double>("cache-size-bytes", () => GetCacheSize());
                 s_cacheItemCount = s_meter.CreateObservableGauge<double>("cache-count-items", () => GetCacheItemCount());
+            }
+            else
+            {
+                ResetCounters();
+            }
+        }
+
+        private void ResetCounters()
+        {
+            if (DateTime.Now > s_resetTimeSpamp)
+            {
+                s_resetTimeSpamp = DateTime.Now.AddMinutes(1);
+                s_cacheReadHits = s_meter.CreateCounter<int>("cache-read-count");
+                s_cacheWriteHits = s_meter.CreateCounter<int>("cache-write-count");
+                s_cacheReadBytes = s_meter.CreateCounter<double>("cache-read-bytes");
+                s_cacheWriteBytes = s_meter.CreateCounter<double>("cache-written-bytes");
+                System.Diagnostics.Debug.WriteLine($"{DateTime.Now}: Reset counters...");
             }
         }
 
@@ -181,6 +203,7 @@ namespace Microsoft.Extensions.Caching.Oracle
         }
         public byte[] GetCacheItem(string key)
         {
+            ResetCounters();
             s_cacheReadHits.Add(1);
             
             List<OracleParameter> parameters = new List<OracleParameter>();
@@ -206,6 +229,7 @@ namespace Microsoft.Extensions.Caching.Oracle
 
         public virtual long GetCacheSize()
         {
+            ResetCounters();
             s_cacheReadHits.Add(1);
 
             List<OracleParameter> parameters = new List<OracleParameter>();
@@ -218,6 +242,7 @@ namespace Microsoft.Extensions.Caching.Oracle
 
         public virtual long GetCacheItemCount()
         {
+            ResetCounters();
             s_cacheReadHits.Add(1);
 
             List<OracleParameter> parameters = new List<OracleParameter>();
@@ -230,6 +255,7 @@ namespace Microsoft.Extensions.Caching.Oracle
 
         public virtual void SetCacheItem(string key, byte[] value, DistributedCacheEntryOptions options)
         {
+            ResetCounters();
             s_cacheWriteHits.Add(1);
             if (value != null)
                 s_cacheWriteBytes.Add(value.Length);
@@ -272,6 +298,7 @@ namespace Microsoft.Extensions.Caching.Oracle
         }
         public async Task<byte[]> GetCacheItemAsync(string key, CancellationToken token = default(CancellationToken))
         {
+            ResetCounters();
             s_cacheReadHits.Add(1);
             
             token.ThrowIfCancellationRequested();
@@ -302,6 +329,7 @@ namespace Microsoft.Extensions.Caching.Oracle
         }
         public async Task SetCacheItemAsync(string key, byte[] value, DistributedCacheEntryOptions options, CancellationToken token = default(CancellationToken))
         {
+            ResetCounters();
             s_cacheWriteHits.Add(1);
             if (value != null)
                 s_cacheWriteBytes.Add(value.Length);
