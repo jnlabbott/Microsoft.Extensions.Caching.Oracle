@@ -33,6 +33,11 @@ namespace Microsoft.Extensions.Caching.Oracle
         public string SchemaName { get; set; }
 
         /// <summary>
+        /// The package name in the schema.
+        /// </summary>
+        public string PackageName { get; set; }
+
+        /// <summary>
         /// The default sliding expiration set for a cache entry if neither Absolute or SlidingExpiration has been set explicitly.
         /// By default, its 20 minutes.
         /// </summary>

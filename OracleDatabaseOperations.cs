@@ -151,21 +151,23 @@ namespace Microsoft.Extensions.Caching.Oracle
         static Counter<double> s_cacheWriteBytes;
         static ObservableGauge<double> s_cacheSizeBytes;
         static ObservableGauge<double> s_cacheItemCount;
-        static DateTime s_resetTimeSpamp;
+        static DateTime s_resetTimeStamp;
 
         public IOracleDatabaseOperations oracleDatabaseOperations;
         protected string SchemaName { get; }
+        protected string PackageName { get; }
         protected ISystemClock SystemClock { get; }
 
-        public DatabaseOperations(string connectionString, string schemaName, ISystemClock systemClock)
+        public DatabaseOperations(string connectionString, string schemaName, string packageName, ISystemClock systemClock)
         {
             oracleDatabaseOperations = new OracleDatabaseOperations(connectionString);
             SchemaName = schemaName;
+            PackageName = packageName;
             SystemClock = systemClock;
 
             if (s_meter == null)
             {
-                s_resetTimeSpamp = DateTime.Now.AddMinutes(1);
+                s_resetTimeStamp = DateTime.Now.AddMinutes(1);
                 s_meter = new("Microsoft.Extensions.Caching.Oracle", "6.0.1");
                 s_updown = s_meter.CreateUpDownCounter<int>("up-down");
                 s_cacheReadHits = s_meter.CreateCounter<int>("cache-read-count");
@@ -183,9 +185,9 @@ namespace Microsoft.Extensions.Caching.Oracle
 
         private void ResetCounters()
         {
-            if (DateTime.Now > s_resetTimeSpamp)
+            if (DateTime.Now > s_resetTimeStamp)
             {
-                s_resetTimeSpamp = DateTime.Now.AddMinutes(1);
+                s_resetTimeStamp = DateTime.Now.AddMinutes(1);
                 s_cacheReadHits = s_meter.CreateCounter<int>("cache-read-count");
                 s_cacheWriteHits = s_meter.CreateCounter<int>("cache-write-count");
                 s_cacheReadBytes = s_meter.CreateCounter<double>("cache-read-bytes");
@@ -198,7 +200,7 @@ namespace Microsoft.Extensions.Caching.Oracle
         {
             List<OracleParameter> parameters = new List<OracleParameter>();
             parameters.Add(new OracleParameter { ParameterName = "p_key", OracleDbType = OracleDbType.Varchar2, Value = key });
-            var procedureName = $"{SchemaName}.SESSION_CACHE_PKG.Delete_Cache";
+            var procedureName = $"{PackageName}.Delete_Cache";
             oracleDatabaseOperations.ExecuteProcedure(key, procedureName, parameters);
         }
         public byte[] GetCacheItem(string key)
@@ -209,7 +211,7 @@ namespace Microsoft.Extensions.Caching.Oracle
             List<OracleParameter> parameters = new List<OracleParameter>();
             parameters.Add(new OracleParameter { ParameterName = "p_key", OracleDbType = OracleDbType.Varchar2, Value = key });
             parameters.Add(new OracleParameter { ParameterName = "p_value", OracleDbType = OracleDbType.Blob, Value = key, Direction = ParameterDirection.Output });
-            var procedureName = $"{SchemaName}.SESSION_CACHE_PKG.Get_Cache";
+            var procedureName = $"{PackageName}.Get_Cache";
 
             var result = oracleDatabaseOperations.ExecuteProcedure(key, procedureName, parameters);
 
@@ -223,7 +225,7 @@ namespace Microsoft.Extensions.Caching.Oracle
         }
         public virtual void DeleteExpiredCacheItems()
         {
-            var procedureName = $"{SchemaName}.SESSION_CACHE_PKG.DeleteExpiredCache";
+            var procedureName = $"{PackageName}.DeleteExpiredCache";
             oracleDatabaseOperations.ExecuteProcedure(String.Empty, procedureName);
         }
 
@@ -235,7 +237,7 @@ namespace Microsoft.Extensions.Caching.Oracle
             List<OracleParameter> parameters = new List<OracleParameter>();
             parameters.Add(new OracleParameter { ParameterName = "p_value", OracleDbType = OracleDbType.Int64, Value = 0, Direction = ParameterDirection.Output });
 
-            var procedureName = $"{SchemaName}.SESSION_CACHE_PKG.GetSize";
+            var procedureName = $"{PackageName}.GetSize";
             var result = oracleDatabaseOperations.ExecuteProcedure(String.Empty, procedureName, parameters);
             return BitConverter.ToInt64(result, 0);
         }
@@ -248,7 +250,7 @@ namespace Microsoft.Extensions.Caching.Oracle
             List<OracleParameter> parameters = new List<OracleParameter>();
             parameters.Add(new OracleParameter { ParameterName = "p_value", OracleDbType = OracleDbType.Int64, Value = 0, Direction = ParameterDirection.Output });
 
-            var procedureName = $"{SchemaName}.SESSION_CACHE_PKG.GetCount";
+            var procedureName = $"{PackageName}.GetCount";
             var result = oracleDatabaseOperations.ExecuteProcedure(String.Empty, procedureName, parameters);
             return BitConverter.ToInt64(result, 0);
         }
@@ -267,7 +269,7 @@ namespace Microsoft.Extensions.Caching.Oracle
             parameters.Add(new OracleParameter { ParameterName = "p_key", OracleDbType = OracleDbType.Varchar2, Value = key });
             parameters.Add(new OracleParameter { ParameterName = "p_slidingExpirationInSeconds", OracleDbType = OracleDbType.Int64, Value = options.SlidingExpiration?.TotalSeconds });
             parameters.Add(new OracleParameter { ParameterName = "p_absoluteExpiration", OracleDbType = OracleDbType.TimeStamp, Value = (absoluteExpiration != null ? new OracleTimeStamp(absoluteExpiration.Value.DateTime) : (object)DBNull.Value) });
-            var procedureName = $"{SchemaName}.SESSION_CACHE_PKG.Put_Cache";
+            var procedureName = $"{PackageName}.Put_Cache";
             oracleDatabaseOperations.ExecuteProcedure(key, procedureName, parameters, value);
         }
         protected DateTimeOffset? GetAbsoluteExpiration(DateTimeOffset utcNow, DistributedCacheEntryOptions options)
@@ -305,7 +307,7 @@ namespace Microsoft.Extensions.Caching.Oracle
             List<OracleParameter> parameters = new List<OracleParameter>();
             parameters.Add(new OracleParameter { ParameterName = "p_key", OracleDbType = OracleDbType.Varchar2, Value = key });
             parameters.Add(new OracleParameter { ParameterName = "p_value", OracleDbType = OracleDbType.Blob, Value = key, Direction = ParameterDirection.Output });
-            var procedureName = $"{SchemaName}.SESSION_CACHE_PKG.Get_Cache";
+            var procedureName = $"{PackageName}.Get_Cache";
             
             var result = oracleDatabaseOperations.ExecuteProcedure(key, procedureName, parameters);
 
@@ -324,7 +326,7 @@ namespace Microsoft.Extensions.Caching.Oracle
             token.ThrowIfCancellationRequested();
             List<OracleParameter> parameters = new List<OracleParameter>();
             parameters.Add(new OracleParameter { ParameterName = "p_key", OracleDbType = OracleDbType.Varchar2, Value = key });
-            var procedureName = $"{SchemaName}.SESSION_CACHE_PKG.Delete_Cache";
+            var procedureName = $"{PackageName}.Delete_Cache";
             await oracleDatabaseOperations.ExecuteProcedureAsync(key, procedureName, parameters);
         }
         public async Task SetCacheItemAsync(string key, byte[] value, DistributedCacheEntryOptions options, CancellationToken token = default(CancellationToken))
@@ -342,7 +344,7 @@ namespace Microsoft.Extensions.Caching.Oracle
             parameters.Add(new OracleParameter { ParameterName = "p_key", OracleDbType = OracleDbType.Varchar2, Value = key });
             parameters.Add(new OracleParameter { ParameterName = "p_slidingExpirationInSeconds", OracleDbType = OracleDbType.Int64, Value = options.SlidingExpiration?.TotalSeconds });
             parameters.Add(new OracleParameter { ParameterName = "p_absoluteExpiration", OracleDbType = OracleDbType.TimeStamp, Value = (absoluteExpiration != null ? new OracleTimeStamp(absoluteExpiration.Value.DateTime) : (object)DBNull.Value) });
-            var procedureName = $"{SchemaName}.SESSION_CACHE_PKG.Put_Cache";
+            var procedureName = $"{PackageName}.Put_Cache";
             await oracleDatabaseOperations.ExecuteProcedureAsync(key, procedureName, parameters, value);
         }
     }

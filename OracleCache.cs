@@ -63,6 +63,7 @@ namespace Microsoft.Extensions.Caching.Oracle
             m_oracleOperations = new DatabaseOperations(
                 cacheOptions.ConnectionString,
                 cacheOptions.SchemaName,
+                cacheOptions.PackageName,
                 _systemClock);
         }
 
